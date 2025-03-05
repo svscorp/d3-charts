@@ -76,3 +76,7 @@ node.call(
 3. Enjoy the result
 
 <img width="433" alt="image" src="https://github.com/user-attachments/assets/2ce65f2a-6aa6-4e2b-b2c8-ae11cada0f43" />
+
+### 1.3 If you want stickiness
+
+Add `.force("charge", d3.forceManyBody().strength(150))` to the d3 simulation call. And enjoy the result.
