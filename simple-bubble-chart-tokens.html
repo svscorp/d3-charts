@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>D3 Token Circles Example</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at 30% 30%, #2a2a2a, #000000);
+      font-family: sans-serif;
+      color: #fff;
+    }
+    #chart {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    .tooltip {
+      position: absolute;
+      padding: 8px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      border-radius: 4px;
+      pointer-events: none;
+      font-size: 12px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .node {
+      cursor: pointer;
+    }
+    .node text {
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="chart"></div>
+
+<script>
+  // Sample data
+  const data = [
+    { name: "BTC", img: "https://cryptologos.cc/logos/thumbs/bitcoin.png",  percentage: 10.2, price: 30100, mcap: "580B", marketCap: 580, social: 500, rank: 1,  isPositive: true },
+    { name: "ETH", img: "https://cryptologos.cc/logos/thumbs/ethereum.png",  percentage: -5.3, price: 2100,  mcap: "250B", marketCap: 250, social: 400, rank: 2,  isPositive: false },
+    { name: "XRP", img: "https://cryptologos.cc/logos/thumbs/xrp.png",  percentage: 2.1,  price: 0.39,   mcap: "40B",  marketCap: 40,  social: 350, rank: 6,  isPositive: true },
+    { name: "BNB", img: "https://cryptologos.cc/logos/thumbs/bnb.png",  percentage: 0.7,  price: 310,   mcap: "50B",  marketCap: 50,  social: 320, rank: 4,  isPositive: true },
+    { name: "SOL", img: "https://cryptologos.cc/logos/thumbs/solana.png",  percentage: -2.8, price: 20,    mcap: "8B",   marketCap: 8,   social: 290, rank: 10, isPositive: false },
+    { name: "DOGE", img: "https://cryptologos.cc/logos/thumbs/dogecoin.png", percentage: 1.2,  price: 0.08,  mcap: "11B",  marketCap: 11,  social: 450, rank: 9,  isPositive: true },
+    { name: "ADA", img: "https://cryptologos.cc/logos/thumbs/cardano.png",  percentage: 4.9,  price: 0.40,  mcap: "14B",  marketCap: 14,  social: 270, rank: 7,  isPositive: true },
+    { name: "DOT", img: "https://cryptologos.cc/logos/thumbs/polkadot-new.png",  percentage: -3.1, price: 6.20,  mcap: "7B",   marketCap: 7,   social: 210, rank: 12, isPositive: false },
+    { name: "MATIC", img: "https://cryptologos.cc/logos/thumbs/polygon.png", percentage: 6.5,  price: 1.10,  mcap: "9B",   marketCap: 9,   social: 330, rank: 8,  isPositive: true },
+  ];
+
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+
+  // Create SVG
+  const svg = d3.select("#chart")
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+  // Tooltip
+  const tooltip = d3.select("#chart")
+    .append("div")
+    .attr("class", "tooltip");
+
+  // Define gradients
+  const defs = svg.append("defs");
+
+  // Positive gradient (green)
+  const posGradient = defs.append("radialGradient")
+    .attr("id", "posGrad")
+    .attr("cx", "50%")
+    .attr("cy", "50%")
+    .attr("r", "50%");
+  posGradient.append("stop")
+    .attr("offset", "0%")
+    .attr("stop-color", "#14c46d"); // bright center
+  posGradient.append("stop")
+    .attr("offset", "100%")
+    .attr("stop-color", "#0f3922"); // dark outer
+
+  // Negative gradient (red)
+  const negGradient = defs.append("radialGradient")
+    .attr("id", "negGrad")
+    .attr("cx", "50%")
+    .attr("cy", "50%")
+    .attr("r", "50%");
+  negGradient.append("stop")
+    .attr("offset", "0%")
+    .attr("stop-color", "#db3e39"); // bright center
+  negGradient.append("stop")
+    .attr("offset", "100%")
+    .attr("stop-color", "#4b0d0a"); // dark outer
+
+  // Circle size scale
+  const radiusScale = d3.scaleSqrt()
+    .domain([d3.min(data, d => d.marketCap), d3.max(data, d => d.marketCap)])
+    .range([20, 80]);
+
+  // A helper to ensure minimum radius to fit image & text
+  function getRadius(d) {
+    const scaled = radiusScale(d.marketCap);
+    const minNeeded = 36; // adjust as needed
+    return Math.max(scaled, minNeeded);
+  }
+
+  const logoFractionScale = d3.scaleLinear()
+  .domain([40, 80])  // minimum radius -> maximum radius
+  .range([0.9, 0.5]) // fraction: near top -> more centered
+  .clamp(true);      // ensure values don’t go outside [0.9, 0.5]
+
+  function calculatedVerticalPosition(d) {
+    const r = getRadius(d);
+    // get fraction (somewhere between 0.9 and 0.5 depending on r)
+    const fraction = logoFractionScale(r);
+    return -r * fraction; // negative to move above the circle center
+  }
+
+
+  // Force simulation
+  const simulation = d3.forceSimulation(data)
+    .force("charge", d3.forceManyBody().strength(0))
+    .force("collide", d3.forceCollide().radius(d => getRadius(d) + 4))
+    .force("center", d3.forceCenter(width / 2, height / 2));
+
+  // Create groups
+  const node = svg.selectAll(".node")
+    .data(data)
+    .enter()
+    .append("g")
+    .attr("class", "node")
+    .on("mouseover", (event, d) => {
+  tooltip
+    .style("opacity", 1)
+    .html(`
+      <div style="width: 220px; font-family: sans-serif;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td>Price</td>
+            <td style="text-align: right; color: grey">$${d.price}</td>
+          </tr>
+          <tr>
+            <td>MC / Liq</td>
+            <td style="text-align: right; color: grey">${d.mcap}</td>
+          </tr>
+          <tr>
+            <td>Social Sentiment</td>
+            <td style="text-align: right; color: grey">${d.social}</td>
+          </tr>
+          <tr>
+            <td>Rank</td>
+            <td style="text-align: right; color: grey">${d.rank}</td>
+          </tr>
+        </table>
+      </div>
+    `);
+})
+    .on("mousemove", (event) => {
+      tooltip
+        .style("left", (event.pageX + 15) + "px")
+        .style("top", (event.pageY - 20) + "px");
+    })
+    .on("mouseout", () => {
+      tooltip.style("opacity", 0);
+    });
+
+  // Circle with gradient
+  node.append("circle")
+    .attr("r", d => getRadius(d))
+    .attr("fill", d => d.isPositive ? "url(#posGrad)" : "url(#negGrad)")
+    .attr("stroke", "rgba(255, 255, 255, 0.3)") 
+    .attr("stroke-width", 2);
+
+  const logoSize = 32;
+  const spacing = 4;
+  const lineHeight = 8;
+  const negativeRadiusModifier = -0.9;
+
+  // Placeholder token image (use real token URLs if available)
+  node.append("image")
+    .attr("xlink:href", d => d.img)
+    .attr("width", logoSize)
+    .attr("height", logoSize)
+    // .attr("width", 32)
+    // .attr("height", 32)
+    // .attr("x", d => -16)
+    // .attr("y", d => -getRadius(d) * 0.7);
+    .attr("x", -logoSize / 2)
+    .attr("y", d => calculatedVerticalPosition(d));
+
+  // Token symbol text
+  node.append("text")
+    .attr("text-anchor", "middle")
+    // .attr("dy", "0.7em")
+    .style("fill", "#ffffff")
+    .style("font-size", "14px")
+    .attr("y", d => (calculatedVerticalPosition(d) + 4*spacing + logoSize))
+    .style("font-weight", "bold")
+    .text(d => d.name);
+
+  // Percentage text
+  node.append("text")
+    .attr("text-anchor", "middle")
+    // .attr("dy", "2em")
+    .attr("y", d => (calculatedVerticalPosition(d) + 5*spacing + logoSize + lineHeight))
+    .style("fill", "#ffffff")
+    .style("font-size", "12px")
+    .text(d => `${d.percentage}%`);
+
+  // Simulation tick
+  simulation.on("tick", () => {
+    node.attr("transform", d => `translate(${d.x}, ${d.y})`);
+  });
+</script>
+</body>
+</html>
